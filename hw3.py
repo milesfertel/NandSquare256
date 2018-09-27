@@ -52,7 +52,119 @@ def nandsquare(n):
     return str(prog)
 
 # TODO: Do this for bonus points and the leaderboard.
-def knandsquare256():
+def nandsquare256():
+    #return onandsquare(256)
+    return fasternand256()
+
+def fasternand256():
+    '''Implement nandsquare for a specific input size, n=256. This result gets
+    placed on the leaderboard for extra credit. If you get close to the top
+    score on the leaderboard, you'll still recieve BONUS POINTS!!!'''
+    n = 256
+    prog = NANDProgram(n, n)
+    prog.ONE("ONE")
+    prog.ZERO("ZERO")
+
+    table = {}
+    half = n/2
+    inputs = [prog.input_var(i) for i in range(n)]
+    a = inputs[:half]
+    b = inputs[half:]
+    c = inputs[:half]
+    d = inputs[half:]
+    partials = []
+    table = {}
+    # create symmetric partial sums for BD
+    for i in range(n/2):
+        partial = ["ZERO" for _ in range(i)]
+        for j in range(n/2):
+            if j + i >= 2 * i:
+                partial.append(prog.allocate())
+                prog.AND(partial[-1], prog.input_var(i), prog.input_var(j))
+                table[str(i) + ' ' +  str(j)] = partial[-1]
+            else:
+                if str(i) + ' ' + str(j) in table:
+                    partial.append(table[str(i) + ' ' + str(j)])
+                elif str(j) + ' ' + str(i) in table:
+                    partial.append(table[str(j) + ' ' + str(i)])
+                else:
+                    print "PANIC"
+                    return
+        for j in range(n-len(partial)):
+            partial.append("ZERO")
+        partials.append(partial)
+
+    # calculate BD
+    seenzero = False
+    total = partials.pop(0)
+    prog.AND(prog.output_var(0), total[0], "ONE")
+    for index, partial in enumerate(partials):
+        newtotal = total[:]
+        carry = prog.allocate()
+        last_carry = ""
+        prog.ADD_2(prog.output_var(index + 1), carry,
+                   partial[index + 1], total[index + 1])
+        if index == n/2 - 1:
+            break;
+
+        seenzero = False
+        for i in range(index + 2, n - 1):
+            last_carry = carry
+            if seenzero:
+                assert partial[i] == "ZERO"
+                newtotal[i] = "ZERO"
+            else:
+                if partial[i] == "ZERO":
+                    seenzero = True
+
+                carry = prog.allocate()
+                newtotal[i] = prog.allocate()
+                prog.ADD_3(newtotal[i], carry,
+                           partial[i], total[i], last_carry)
+        # This can also be optimized for ZEROs
+        if seenzero:
+            assert partial[n - 1] == "ZERO"
+            newtotal[n - 1] = "ZERO"
+        else:
+            newtotal[n - 1] = prog.allocate()
+            prog.ADD_3(newtotal[n - 1], "TRASH",
+                       partial[n - 1], total[n - 1], carry)
+        total = newtotal
+
+    # create partial sums for AD
+    partials = []
+    for i in range(n/2 - 1):
+        partial = ["ZERO" for _ in range(i + (n / 2) + 1)]
+        for j in range(n/2 - 1 - i):
+            partial.append(prog.allocate())
+            prog.AND(partial[-1], a[i], d[j])
+        partials.append(partial)
+    # calcualte AD
+    for uindex, partial in enumerate(partials):
+        newtotal = total[:]
+        index = uindex + n/2
+        carry = prog.allocate()
+        last_carry = ""
+        prog.ADD_2(prog.output_var(index + 1), carry,
+                   partial[index + 1], total[index + 1])
+        if index == n - 2:
+            break;
+
+        for i in range(index + 2, n - 1):
+            last_carry = carry
+            carry = prog.allocate()
+            newtotal[i] = prog.allocate()
+            prog.ADD_3(newtotal[i], carry,
+                       partial[i], total[i], last_carry)
+        newtotal[n - 1] = prog.allocate()
+        prog.ADD_3(newtotal[n - 1], "TRASH",
+                   partial[n - 1], total[n - 1], carry)
+        total = newtotal
+
+    # "compiles" your completed program as a NAND program string.
+    return str(prog)
+
+def fastnand256():
     '''Implement nandsquare for a specific input size, n=256. This result gets
     placed on the leaderboard for extra credit. If you get close to the top
     score on the leaderboard, you'll still recieve BONUS POINTS!!!'''
@@ -157,69 +269,10 @@ def knandsquare256():
                    partial[n - 1], total[n - 1], carry)
         total = newtotal
 
-    #for index, partial in enumerate(partials):
-    #    newtotal = total[:]
-    #    carry = prog.allocate()
-    #    last_carry = ""
-    #    index = dex + n / 2
-    #    prog.ADD_3(prog.output_var(index + 1), carry,
-    #               partial[dex + 1], total[index + 1], "ZERO")
-
-    #    for i in range(index + 2, n - 1):
-    #        last_carry = carry
-    #        carry = prog.allocate()
-    #        newtotal[i] = prog.allocate()
-    #        prog.ADD_3(newtotal[i], carry,
-    #                   partial[i - n/2], total[i], last_carry)
-    #    newtotal[n - 1] = prog.allocate()
-    #    prog.ADD_3(newtotal[n - 1], "TRASH",
-    #               partial[n - 1 - n/2], total[n - 1], carry)
-    #    total = newtotal
-
     # "compiles" your completed program as a NAND program string.
     return str(prog)
 
-# TODO: Do this for bonus points and the leaderboard.
-def oknandsquare256():
-    '''Implement nandsquare for a specific input size, n=256. This result gets
-    placed on the leaderboard for extra credit. If you get close to the top
-    score on the leaderboard, you'll still recieve BONUS POINTS!!!'''
-    n = 256
-    prog = NANDProgram(n, n)
-    prog.ONE("ONE")
-    prog.ZERO("ZERO")
-
-    table = {}
-    def mult(prog, a, b):
-        if len(a) == 1 and len(b) == 1:
-            if a[0] + ' ' + b[0] in table:
-                return [table[a[0] + ' ' + b[0]]]
-            elif b[0] + ' ' + a[0] in table:
-                return [table[b[0] + ' ' + a[0]]]
-            else:
-                bit = prog.allocate()
-                prog.AND(bit, a[0], b[0])
-                table[a[0] + ' ' + b[0]] = bit
-                return [bit]
-        half = len(a)/2
-        a_left = a[:half]
-        a_right = a[half:]
-        b_left = b[:half]
-        b_right = b[half:]
-        first = mult(prog, a_left, b_left)
-        second = mult(prog, a_right, b_right)
-        sumsides = addbits(a_left, a_right)
-        third = mult(prog, sumsides, sumsides)
-
-    inputs = [prog.input_var(i) for i in range(n)]
-    res = mult(prog, inputs, inputs)
-    for i in range(n):
-        prog.AND(prog.output_var(i), res[i], "ONE")
-
-    # "compiles" your completed program as a NAND program string.
-    return str(prog)
-
-# TODO: Do this for bonus points and the leaderboard.
+## TODO: Do this for bonus points and the leaderboard.
 def onandsquare(n):
     '''Implement nandsquare for a specific input size, n=256. This result gets
     placed on the leaderboard for extra credit. If you get close to the top
@@ -272,127 +325,127 @@ def onandsquare(n):
 
     # "compiles" your completed program as a NAND program string.
     return str(prog)
-
-# TODO: Do this for bonus points and the leaderboard.
-def nandsquare256():
-    '''Implement nandsquare for a specific input size, n=256. This result gets
-    placed on the leaderboard for extra credit. If you get close to the top
-    score on the leaderboard, you'll still recieve BONUS POINTS!!!'''
-    n = 256
-    prog = NANDProgram(n, n)
-    prog.ONE("ONE")
-    prog.ZERO("ZERO")
-    partials = []
-    table = {}
-    # create symmetric partial sums
-    for i in range(n):
-        partial = ["ZERO" for z in range(i)]
-        for j in range(n - len(partial)):
-            if j + i >= 2 * i:
-                partial.append(prog.allocate())
-                prog.AND(partial[-1], prog.input_var(i), prog.input_var(j))
-                table[str(i) + ' ' +  str(j)] = partial[-1]
-            else:
-                if str(i) + ' ' + str(j) in table:
-                    partial.append(table[str(i) + ' ' + str(j)])
-                elif str(j) + ' ' + str(i) in table:
-                    partial.append(table[str(j) + ' ' + str(i)])
-                else:
-                    print "PANIC"
-                    return
-        partials.append(partial)
-
-    # sum partial sums
-    total = partials.pop(0)
-    prog.AND(prog.output_var(0), total[0], "ONE")
-    for index, partial in enumerate(partials):
-        newtotal = total[:]
-        carry = prog.allocate()
-        last_carry = ""
-        prog.ADD_3(prog.output_var(index + 1), carry,
-                   partial[index + 1], total[index + 1], "ZERO")
-        if index == 254:
-            break;
-
-        for i in range(index + 2, n - 1):
-            last_carry = carry
-            carry = prog.allocate()
-            newtotal[i] = prog.allocate()
-            prog.ADD_3(newtotal[i], carry,
-                       partial[i], total[i], last_carry)
-        newtotal[n - 1] = prog.allocate()
-        prog.ADD_3(newtotal[n - 1], "TRASH",
-                   partial[n - 1], total[n - 1], carry)
-        total = newtotal
-
-    # "compiles" your completed program as a NAND program string.
-    return str(prog)
-
-# TODO: Do this for bonus points and the leaderboard.
-def oldnandsquare256():
-    '''Implement nandsquare for a specific input size, n=256. This result gets
-    placed on the leaderboard for extra credit. If you get close to the top
-    score on the leaderboard, you'll still recieve BONUS POINTS!!!'''
-    prog = NANDProgram(256, 256)
-    prog.ONE("ONE")
-    prog.ZERO("ZERO")
-    n = 256
-    partials = []
-    table = {}
-    # create partial sums
-    for i in range(n):
-        partial = ["ZERO" for z in range(i)]
-        for j in range(n - len(partial)):
-            if j + i >= 2 * i:
-                partial.append(prog.allocate())
-                prog.AND(partial[-1], prog.input_var(i), prog.input_var(j))
-                table[str(i) + ' ' +  str(j)] = partial[-1]
-            else:
-                if str(i) + ' ' + str(j) in table:
-                    partial.append(table[str(i) + ' ' + str(j)])
-                elif str(j) + ' ' + str(i) in table:
-                    partial.append(table[str(j) + ' ' + str(i)])
-                else:
-                    print "PANIC"
-                    return
-        partials.append(partial)
-
-    # sum partial sums
-    total = partials.pop(0)
-    for index, partial in enumerate(partials):
-        newtotal = total[:]
-        carry = prog.allocate()
-
-        newtotal[0] = prog.allocate()
-        prog.ADD_3(newtotal[0] if index != len(partials) - 1 else prog.output_var(0), carry,
-                   partial[0], total[0], "ZERO")
-        last_carry = ""
-        for i in range(1, n - 1):
-            last_carry = carry
-            carry = prog.allocate()
-            newtotal[i] = prog.allocate()
-            prog.ADD_3(newtotal[i] if index != len(partials) - 1 else prog.output_var(i), carry,
-                       partial[i], total[i], last_carry)
-        newtotal[n - 1] = prog.allocate()
-        prog.ADD_3(newtotal[n - 1] if index != len(partials) - 1 else prog.output_var(n - 1), "TRASH",
-                   partial[n - 1], total[n - 1], carry)
-        total = newtotal
-
-    # "compiles" your completed program as a NAND program string.
-    return str(prog)
-
-def tupToProg(t):
-    nand = NANDProgram(t[0], t[1], debug=False)
-    vs = [nand.input_var(v) for v in range(t[0])]
-    i = 0
-    for line in t[2]:
-        if len(vs) >= t[0] + len(t[2]) - t[1]:
-            vs.append(nand.output_var(i))
-            i += 1
-        else:
-            vs.append(nand.allocate())
-        nand.NAND(vs[line[0]], vs[line[1]], vs[line[2]])
-    return str(nand)
+#
+## TODO: Do this for bonus points and the leaderboard.
+#def onandsquare256():
+#    '''Implement nandsquare for a specific input size, n=256. This result gets
+#    placed on the leaderboard for extra credit. If you get close to the top
+#    score on the leaderboard, you'll still recieve BONUS POINTS!!!'''
+#    n = 256
+#    prog = NANDProgram(n, n)
+#    prog.ONE("ONE")
+#    prog.ZERO("ZERO")
+#    partials = []
+#    table = {}
+#    # create symmetric partial sums
+#    for i in range(n):
+#        partial = ["ZERO" for z in range(i)]
+#        for j in range(n - len(partial)):
+#            if j + i >= 2 * i:
+#                partial.append(prog.allocate())
+#                prog.AND(partial[-1], prog.input_var(i), prog.input_var(j))
+#                table[str(i) + ' ' +  str(j)] = partial[-1]
+#            else:
+#                if str(i) + ' ' + str(j) in table:
+#                    partial.append(table[str(i) + ' ' + str(j)])
+#                elif str(j) + ' ' + str(i) in table:
+#                    partial.append(table[str(j) + ' ' + str(i)])
+#                else:
+#                    print "PANIC"
+#                    return
+#        partials.append(partial)
+#
+#    # sum partial sums
+#    total = partials.pop(0)
+#    prog.AND(prog.output_var(0), total[0], "ONE")
+#    for index, partial in enumerate(partials):
+#        newtotal = total[:]
+#        carry = prog.allocate()
+#        last_carry = ""
+#        prog.ADD_3(prog.output_var(index + 1), carry,
+#                   partial[index + 1], total[index + 1], "ZERO")
+#        if index == 254:
+#            break;
+#
+#        for i in range(index + 2, n - 1):
+#            last_carry = carry
+#            carry = prog.allocate()
+#            newtotal[i] = prog.allocate()
+#            prog.ADD_3(newtotal[i], carry,
+#                       partial[i], total[i], last_carry)
+#        newtotal[n - 1] = prog.allocate()
+#        prog.ADD_3(newtotal[n - 1], "TRASH",
+#                   partial[n - 1], total[n - 1], carry)
+#        total = newtotal
+#
+#    # "compiles" your completed program as a NAND program string.
+#    return str(prog)
+#
+## TODO: Do this for bonus points and the leaderboard.
+#def oldnandsquare256():
+#    '''Implement nandsquare for a specific input size, n=256. This result gets
+#    placed on the leaderboard for extra credit. If you get close to the top
+#    score on the leaderboard, you'll still recieve BONUS POINTS!!!'''
+#    prog = NANDProgram(256, 256)
+#    prog.ONE("ONE")
+#    prog.ZERO("ZERO")
+#    n = 256
+#    partials = []
+#    table = {}
+#    # create partial sums
+#    for i in range(n):
+#        partial = ["ZERO" for z in range(i)]
+#        for j in range(n - len(partial)):
+#            if j + i >= 2 * i:
+#                partial.append(prog.allocate())
+#                prog.AND(partial[-1], prog.input_var(i), prog.input_var(j))
+#                table[str(i) + ' ' +  str(j)] = partial[-1]
+#            else:
+#                if str(i) + ' ' + str(j) in table:
+#                    partial.append(table[str(i) + ' ' + str(j)])
+#                elif str(j) + ' ' + str(i) in table:
+#                    partial.append(table[str(j) + ' ' + str(i)])
+#                else:
+#                    print "PANIC"
+#                    return
+#        partials.append(partial)
+#
+#    # sum partial sums
+#    total = partials.pop(0)
+#    for index, partial in enumerate(partials):
+#        newtotal = total[:]
+#        carry = prog.allocate()
+#
+#        newtotal[0] = prog.allocate()
+#        prog.ADD_3(newtotal[0] if index != len(partials) - 1 else prog.output_var(0), carry,
+#                   partial[0], total[0], "ZERO")
+#        last_carry = ""
+#        for i in range(1, n - 1):
+#            last_carry = carry
+#            carry = prog.allocate()
+#            newtotal[i] = prog.allocate()
+#            prog.ADD_3(newtotal[i] if index != len(partials) - 1 else prog.output_var(i), carry,
+#                       partial[i], total[i], last_carry)
+#        newtotal[n - 1] = prog.allocate()
+#        prog.ADD_3(newtotal[n - 1] if index != len(partials) - 1 else prog.output_var(n - 1), "TRASH",
+#                   partial[n - 1], total[n - 1], carry)
+#        total = newtotal
+#
+#    # "compiles" your completed program as a NAND program string.
+#    return str(prog)
+#
+#def tupToProg(t):
+#    nand = NANDProgram(t[0], t[1], debug=False)
+#    vs = [nand.input_var(v) for v in range(t[0])]
+#    i = 0
+#    for line in t[2]:
+#        if len(vs) >= t[0] + len(t[2]) - t[1]:
+#            vs.append(nand.output_var(i))
+#            i += 1
+#        else:
+#            vs.append(nand.allocate())
+#        nand.NAND(vs[line[0]], vs[line[1]], vs[line[2]])
+#    return str(nand)
 
 
 if __name__ == '__main__':
@@ -409,8 +462,8 @@ if __name__ == '__main__':
     #  10111001011
     # print(EVAL(addfive,'1111'))
 
-    def squaren(N):
-        return str(nandsquare(N))
+    #def squaren(N):
+    #    return str(nandsquare(N))
 
     #for bitcount in range(1, 6):
     #    print "bitcount: " + str(bitcount)
@@ -423,8 +476,8 @@ if __name__ == '__main__':
 
     #square = squaren(int(raw_input("number of bits:")))
     #print len(square.split('\n'))
-    #print(EVAL(square, raw_input("binary: ")))
+    #print(EVAL(nandsquare256(), '10001' + '0'*251))
     #TRUTH(square)
-    #print len(nandsquare256().split('\n'))
-    print len(knandsquare256().split('\n'))
+    print len(nandsquare256().split('\n'))
+    #print len(onandsquare(256).split('\n'))
     #print TRUTH(knandsquare256()) == TRUTH(nandsquare(6))
